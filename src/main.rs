@@ -19,6 +19,16 @@ fn main() {
         }
         Err(e) => println!("Error: {:?}", e),
     }
+    files.sort_by(|a: &TextInfo, b: &TextInfo| {
+        let a_is_dir = a.is_dir;
+        let b_is_dir = b.is_dir;
+        if a_is_dir && !b_is_dir {
+            return std::cmp::Ordering::Less;
+        } else if !a_is_dir && b_is_dir {
+            return std::cmp::Ordering::Greater;
+        }
+        a.filename.cmp(&b.filename)
+    });
     let file_models = std::rc::Rc::new(slint::VecModel::from(files));
     main_window.set_files(file_models.into());
 
@@ -40,23 +50,31 @@ slint::slint! {
     export component MainWindow inherits Window {
         width: 600px;
         height: 400px;
-
-
+        title: "File Explorer";
 
         in property <[TextInfo]> files: [
         ];
         in property <int> vp_height: 0;
+
+        in property <length> file_paddings_left: 10px;
         ScrollView {
-            width: 600px;
-            height: 400px;
-            viewport-width: 600px;
             viewport-height: files.length * 20px;
             
-            for file[i] in files : Text {
-                text: file.filename;
-                color: green;
-                x: 20px;
+            for file[i] in files : TouchArea {
+                width: parent.width;
+                height: 20px;
+                x: file_paddings_left;
                 y: i * 20px;
+
+                text:= Text {
+                    text: file.filename;
+                    color: file.is_dir ? green : blue;
+                    x: parent.x;
+                }
+
+                clicked => {
+                    text.color = #f00;
+                }
             }
         }
     }
