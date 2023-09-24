@@ -123,7 +123,7 @@ fn read_directory(path: &str) -> Result<Vec<DirEntry>, std::io::Error> {
 
 
 slint::slint! {
-    import { ScrollView } from "std-widgets.slint";
+    import { ScrollView, Button } from "std-widgets.slint";
     
     struct TextInfo {
         filename: string,
@@ -145,39 +145,83 @@ slint::slint! {
 
         pure callback reset_selected_files(TextInfo);
         pure callback set_files(TextInfo);
-
-        scroll := ScrollView {
-            viewport-height: files.length * 20px;
-
-            
-            for file[i] in files : TouchArea {
-                width: parent.width;
-                height: 20px;
-                x: file_paddings_left;
-                y: i * 20px;
-                Rectangle {
-                    background: file.is_selected ? #0f03 : transparent;
-                    text:= Text {
-                        text: file.filename;
-                        color: file.is_dir ? green : blue;
-                        x: parent.x;    
+        menu := GridLayout {
+            HorizontalLayout {
+                row: 1;
+                col: 1;
+                colspan: 2;
+                height: 30px;
+                popup_file := PopupWindow {
+                    VerticalLayout {
+                        Text {
+                            text: "Value 1";
+                        }
+                        Text {
+                            text: "Value 2";
+                        }
+                        Text {
+                            text: "Value 3";
+                        }
                     }
-    
                 }
-                clicked => {
-                    if(file.is_dir) {
-                        scroll.enabled = false;
-                        set_files(file);
-                        scroll.enabled = true;
-                    } else {
-                        reset_selected_files(file);
-                        file.is_selected = true;
+                Rectangle {
+                    background: blue;
 
+                    Button {
+                        text: "File";
+                        clicked => {
+                            popup_file.show();
+                        }
                     }
                 }
                 
             }
+            VerticalLayout {
+                row: 2;
+                col: 1;
+                min-width: 80px;
+                width: 10%;
+
+                Rectangle {
+                    background: gray;
+                }
+            }
+            scroll := ScrollView {
+                row: 2;
+                col: 2;
+                height: 100%;
+                width: 100%;
+                viewport-height: files.length * 20px;
+
+            
+                for file[i] in files : TouchArea {
+                    width: parent.width;
+                    height: 20px;
+                    x: file_paddings_left;
+                    y: i * 20px;
+                    Rectangle {
+                        background: file.is_selected ? #0f03 : transparent;
+                        text:= Text {
+                            text: file.filename;
+                            color: file.is_dir ? green : blue;
+                            x: parent.x;    
+                        }
+                        
+                    }
+                    clicked => {
+                        if(file.is_dir) {
+                            scroll.enabled = false;
+                            set_files(file);
+                            scroll.enabled = true;
+                        } else {
+                            reset_selected_files(file);
+                            file.is_selected = true;
+                            
+                        }
+                    }
+                    
+                }
+            }
         }
     }
-    
 }
