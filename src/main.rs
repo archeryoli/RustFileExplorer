@@ -1,16 +1,30 @@
 use std::fs::DirEntry;
 
-use slint::Model;
+use slint::{Model, Window, platform::WindowAdapter};
 // TODO
 // Error happens when position of dir is higher than the amount of files in the folder
+
+impl WindowAdapter for MainWindow {
+    fn window(&self) -> &Window {
+        todo!()
+    }
+
+    fn size(&self) -> slint::PhysicalSize {
+        todo!()
+    }
+
+    fn renderer(&self) -> &dyn slint::platform::Renderer {
+        todo!()
+    }
+}
 fn main() {
     let mut current_dir = "".to_string();
-    let mut title =  "Rust File Explorer";
+    let title =  "Rust File Explorer";
     let main_window = MainWindow::new().unwrap();
 
     let main_window_weak = main_window.as_weak();
 
-    main_window.on_set_files(move |selected_file| {
+    main_window.on_set_files( move |selected_file| {
         let main_window_weak = &main_window_weak.clone();
         main_window_weak.unwrap().set_files(std::rc::Rc::new(slint::VecModel::from(vec![])).into());
         let mut files: Vec<TextInfo> = Vec::new();
@@ -28,14 +42,13 @@ fn main() {
             current_dir.push_str(&selected_file.filename);
         }
 
-        main_window_weak.unwrap().set_custom_title(format!("Rust File Explorer ({})", current_dir).into());
+        main_window_weak.unwrap().set_custom_title(format!("{} ({})", title, current_dir).into());
         current_dir.push('/');
         println!("CurrentDir: {:?}; Selected file: {:?}", current_dir, selected_file);
 
         match read_directory(&current_dir) {
             Ok(entries) => {
                 for entry in &entries {
-                    println!("Entry: {:?}", entry.file_name());
                     let filename = entry.file_name().into_string().unwrap().into();
                     let is_dir = entry.file_type().unwrap().is_dir();
                     let text_info = TextInfo {
@@ -51,16 +64,28 @@ fn main() {
         files.sort_by(|a: &TextInfo, b: &TextInfo| {
             let a_is_dir = a.is_dir;
             let b_is_dir = b.is_dir;
+            if a.filename == ".." && b.filename != ".." {
+                return std::cmp::Ordering::Less;
+            } else if a.filename != ".." && b.filename == ".." {
+                return std::cmp::Ordering::Greater;
+            }
             if a_is_dir && !b_is_dir {
                 return std::cmp::Ordering::Less;
             } else if !a_is_dir && b_is_dir {
                 return std::cmp::Ordering::Greater;
             }
-            a.filename.cmp(&b.filename)
+            if a.filename.starts_with('.') && !b.filename.starts_with('.') {
+                return std::cmp::Ordering::Greater;
+            } else if !a.filename.starts_with('.') && b.filename.starts_with('.') {
+                return std::cmp::Ordering::Less;
+            }
+            a.filename.to_lowercase().cmp(&b.filename.to_lowercase())
         });
         let file_models = std::rc::Rc::new(slint::VecModel::from(files));
         let main_window_weak = main_window_weak.clone();
         main_window_weak.unwrap().set_files(file_models.into());
+        main_window_weak.unwrap().request_redraw();
+
     });
 
     let main_window_weak = main_window.as_weak();
@@ -77,12 +102,13 @@ fn main() {
         let files = std::rc::Rc::new(slint::VecModel::from(out));
         main_window_weak.unwrap().set_files(files.into());
 
+
         if selected_file.is_dir {
             main_window_weak.unwrap().invoke_set_files(selected_file);
         }
     });
     main_window.invoke_set_files(TextInfo {
-        filename: "/home/oliver/HTL".into(),
+        filename: "/home/oliver".into(),
         is_dir: true,
         is_selected: false,
     });
@@ -120,7 +146,7 @@ slint::slint! {
         pure callback reset_selected_files(TextInfo);
         pure callback set_files(TextInfo);
 
-        ScrollView {
+        scroll := ScrollView {
             viewport-height: files.length * 20px;
 
             
@@ -140,8 +166,9 @@ slint::slint! {
                 }
                 clicked => {
                     if(file.is_dir) {
+                        scroll.enabled = false;
                         set_files(file);
-                        parent.has-focus = true;
+                        scroll.enabled = true;
                     } else {
                         reset_selected_files(file);
                         file.is_selected = true;
