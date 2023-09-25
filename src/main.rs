@@ -142,6 +142,7 @@ slint::slint! {
         in property <int> vp_height: 0;
 
         in property <length> file_paddings_left: 10px;
+        property <length> menu_height: 30px;
 
         pure callback reset_selected_files(TextInfo);
         pure callback set_files(TextInfo);
@@ -150,24 +151,39 @@ slint::slint! {
                 row: 1;
                 col: 1;
                 colspan: 2;
-                height: 30px;
+                height: menu_height;
                 popup_file := PopupWindow {
+                    y: menu_height;
                     VerticalLayout {
-                        Text {
-                            text: "Value 1";
+                        Rectangle {
+                            background: #aaa;
+                            Button {
+                                min-width: parent.width;
+                                text: "New (Ctrl + N)";
+                            }
                         }
-                        Text {
-                            text: "Value 2";
+                        Rectangle {
+                            background: #aaa;
+                            
+                            Button {
+                                text: "Open";
+                                min-width: parent.width;
+                            }
                         }
-                        Text {
-                            text: "Value 3";
+                        Rectangle {
+                            background: #aaa;
+                            
+                            Button {
+                                min-width: parent.width;
+                                text: "Close";
+                            }
                         }
                     }
                 }
                 Rectangle {
-                    background: blue;
-
+                    background: gray;
                     Button {
+                        x: 0px;
                         text: "File";
                         clicked => {
                             popup_file.show();
