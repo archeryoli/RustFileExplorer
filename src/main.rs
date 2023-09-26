@@ -1,4 +1,6 @@
 use std::fs::DirEntry;
+use std::process::Command;
+use std::rc::Rc;
 
 use slint::{Model, Window, platform::WindowAdapter};
 // TODO
@@ -18,7 +20,7 @@ impl WindowAdapter for MainWindow {
     }
 }
 fn main() {
-    let mut current_dir = "".to_string();
+    let mut current_dir = Rc::new("".to_string());
     let title =  "Rust File Explorer";
     let main_window = MainWindow::new().unwrap();
 
@@ -26,26 +28,26 @@ fn main() {
 
     main_window.on_set_files( move |selected_file| {
         let main_window_weak = &main_window_weak.clone();
-        main_window_weak.unwrap().set_files(std::rc::Rc::new(slint::VecModel::from(vec![])).into());
+        main_window_weak.unwrap().set_files(Rc::new(slint::VecModel::from(vec![])).into());
         let mut files: Vec<TextInfo> = Vec::new();
+        let mut current_dir = Rc::clone(&current_dir);
         files.push(TextInfo {
             filename: "..".into(),
             is_dir: true,
             is_selected: false,
         });
-        if &selected_file.filename == ".." {
+        current_dir = if &selected_file.filename == ".." {
             let mut split_filename: Vec<&str> = current_dir.split('/').collect();
             split_filename.pop();
             split_filename.pop();
-            current_dir = split_filename.join("/");
+            Rc::new(split_filename.join("/"))
         } else {
-            current_dir.push_str(&selected_file.filename);
-        }
+            Rc::new(format!("{}{}", current_dir, &selected_file.filename))
+        };
 
         main_window_weak.unwrap().set_custom_title(format!("{} ({})", title, current_dir).into());
-        current_dir.push('/');
+        current_dir = format!("{}/", current_dir).into();
         println!("CurrentDir: {:?}; Selected file: {:?}", current_dir, selected_file);
-
         match read_directory(&current_dir) {
             Ok(entries) => {
                 for entry in &entries {
@@ -112,6 +114,13 @@ fn main() {
         is_dir: true,
         is_selected: false,
     });
+    main_window.on_open_new_terminal( move || {
+        let value = Rc::clone(&current_dir);
+        Command::new("gnome-terminal")
+            .arg(format!("--working-directory={}", value))
+            .output()
+            .expect("Wasn't able to execute command");
+    });
     main_window.run().unwrap();
 }
 
@@ -146,6 +155,8 @@ slint::slint! {
 
         pure callback reset_selected_files(TextInfo);
         pure callback set_files(TextInfo);
+        pure callback open_new_terminal();
+
         menu := GridLayout {
             HorizontalLayout {
                 row: 1;
@@ -182,14 +193,26 @@ slint::slint! {
                 }
                 Rectangle {
                     background: gray;
-                    Button {
-                        x: 0px;
-                        text: "File";
-                        clicked => {
-                            popup_file.show();
+                    HorizontalLayout {
+
+                        Button {
+                            width: 50px;
+                            text: "File";
+                            clicked => {
+                                popup_file.show();
+                            }
+                        }
+                        Button {
+                            width: 150px;
+                            text: "New Terminal";  
+
+                            clicked => {
+                                open_new_terminal()
+                            } 
                         }
                     }
                 }
+                
                 
             }
             VerticalLayout {
