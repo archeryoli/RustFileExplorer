@@ -1,4 +1,4 @@
-use std::fs::DirEntry;
+use std::{fs::DirEntry, sync::RwLock};
 use std::process::Command;
 use std::rc::Rc;
 
@@ -20,7 +20,8 @@ impl WindowAdapter for MainWindow {
     }
 }
 fn main() {
-    let mut current_dir = Rc::new("".to_string());
+    let current_dir = Rc::new(RwLock::new("".to_string()));
+    let lock_1 = Rc::clone(&current_dir);
     let title =  "Rust File Explorer";
     let main_window = MainWindow::new().unwrap();
 
@@ -30,25 +31,25 @@ fn main() {
         let main_window_weak = &main_window_weak.clone();
         main_window_weak.unwrap().set_files(Rc::new(slint::VecModel::from(vec![])).into());
         let mut files: Vec<TextInfo> = Vec::new();
-        let mut current_dir = Rc::clone(&current_dir);
+        let mut curr_dir = current_dir.write().unwrap();
         files.push(TextInfo {
             filename: "..".into(),
             is_dir: true,
             is_selected: false,
         });
-        current_dir = if &selected_file.filename == ".." {
-            let mut split_filename: Vec<&str> = current_dir.split('/').collect();
+        *curr_dir = if &selected_file.filename == ".." {
+            let mut split_filename: Vec<&str> = (*curr_dir).split('/').collect();
             split_filename.pop();
             split_filename.pop();
-            Rc::new(split_filename.join("/"))
+            split_filename.join("/")
         } else {
-            Rc::new(format!("{}{}", current_dir, &selected_file.filename))
+            format!("{}{}", *curr_dir, &selected_file.filename)
         };
 
-        main_window_weak.unwrap().set_custom_title(format!("{} ({})", title, current_dir).into());
-        current_dir = format!("{}/", current_dir).into();
-        println!("CurrentDir: {:?}; Selected file: {:?}", current_dir, selected_file);
-        match read_directory(&current_dir) {
+        main_window_weak.unwrap().set_custom_title(format!("{} ({})", title, *curr_dir).into());
+        *curr_dir = format!("{}/", *curr_dir);
+        println!("CurrentDir: {:?}; Selected file: {:?}", *curr_dir, selected_file);
+        match read_directory(&*curr_dir) {
             Ok(entries) => {
                 for entry in &entries {
                     let filename = entry.file_name().into_string().unwrap().into();
@@ -115,9 +116,9 @@ fn main() {
         is_selected: false,
     });
     main_window.on_open_new_terminal( move || {
-        let value = Rc::clone(&current_dir);
+        let read = lock_1.read().unwrap();
         Command::new("gnome-terminal")
-            .arg(format!("--working-directory={}", value))
+            .arg(format!("--working-directory={}", *read))
             .output()
             .expect("Wasn't able to execute command");
     });
