@@ -21,7 +21,7 @@ impl WindowAdapter for MainWindow {
 }
 fn main() {
     let current_dir = Rc::new(RwLock::new("".to_string()));
-    let lock_1 = Rc::clone(&current_dir);
+    let terminal_current_dir_lock = Rc::clone(&current_dir);
     let title =  "Rust File Explorer";
     let main_window = MainWindow::new().unwrap();
 
@@ -30,13 +30,17 @@ fn main() {
     main_window.on_set_files( move |selected_file| {
         let main_window_weak = &main_window_weak.clone();
         main_window_weak.unwrap().set_files(Rc::new(slint::VecModel::from(vec![])).into());
-        let mut files: Vec<TextInfo> = Vec::new();
+
+        let mut files: Vec<TextInfo> = vec![
+            TextInfo {
+                filename: "..".into(),
+                is_dir: true,
+                is_selected: false,
+            }
+        ];
+        // create write lock
         let mut curr_dir = current_dir.write().unwrap();
-        files.push(TextInfo {
-            filename: "..".into(),
-            is_dir: true,
-            is_selected: false,
-        });
+
         *curr_dir = if &selected_file.filename == ".." {
             let mut split_filename: Vec<&str> = (*curr_dir).split('/').collect();
             split_filename.pop();
@@ -45,45 +49,28 @@ fn main() {
         } else {
             format!("{}{}", *curr_dir, &selected_file.filename)
         };
-
+        // sets title of window
         main_window_weak.unwrap().set_custom_title(format!("{} ({})", title, *curr_dir).into());
-        *curr_dir = format!("{}/", *curr_dir);
+
+        curr_dir.push('/');
         println!("CurrentDir: {:?}; Selected file: {:?}", *curr_dir, selected_file);
-        match read_directory(&*curr_dir) {
+
+        match read_directory(&curr_dir) {
             Ok(entries) => {
-                for entry in &entries {
-                    let filename = entry.file_name().into_string().unwrap().into();
-                    let is_dir = entry.file_type().unwrap().is_dir();
-                    let text_info = TextInfo {
-                        filename,
-                        is_dir,
-                        is_selected: false,
-                    };
-                    files.push(text_info);
-                }
+                entries.iter().for_each(|entry| {
+                    files.push(
+                        TextInfo {
+                            filename: entry.file_name().into_string().unwrap().into(),
+                            is_dir: entry.file_type().unwrap().is_dir(),
+                            is_selected: false,
+                        }
+                    )
+                });
             }
             Err(e) => println!("Error: {:?}", e),
         }
-        files.sort_by(|a: &TextInfo, b: &TextInfo| {
-            let a_is_dir = a.is_dir;
-            let b_is_dir = b.is_dir;
-            if a.filename == ".." && b.filename != ".." {
-                return std::cmp::Ordering::Less;
-            } else if a.filename != ".." && b.filename == ".." {
-                return std::cmp::Ordering::Greater;
-            }
-            if a_is_dir && !b_is_dir {
-                return std::cmp::Ordering::Less;
-            } else if !a_is_dir && b_is_dir {
-                return std::cmp::Ordering::Greater;
-            }
-            if a.filename.starts_with('.') && !b.filename.starts_with('.') {
-                return std::cmp::Ordering::Greater;
-            } else if !a.filename.starts_with('.') && b.filename.starts_with('.') {
-                return std::cmp::Ordering::Less;
-            }
-            a.filename.to_lowercase().cmp(&b.filename.to_lowercase())
-        });
+
+        files.sort_by(sort_by_name);
         let file_models = std::rc::Rc::new(slint::VecModel::from(files));
         let main_window_weak = main_window_weak.clone();
         main_window_weak.unwrap().set_files(file_models.into());
@@ -116,11 +103,15 @@ fn main() {
         is_selected: false,
     });
     main_window.on_open_new_terminal( move || {
-        let read = lock_1.read().unwrap();
+        let read = terminal_current_dir_lock.read().unwrap();
         Command::new("gnome-terminal")
             .arg(format!("--working-directory={}", *read))
             .output()
             .expect("Wasn't able to execute command");
+
+        println!("{:?}", Command::new("pwd")
+            .output()
+            .expect("Failed to run cargo run"));
     });
     main_window.run().unwrap();
 }
@@ -131,6 +122,26 @@ fn read_directory(path: &str) -> Result<Vec<DirEntry>, std::io::Error> {
     Ok(entries)
 }
 
+fn sort_by_name(a: &TextInfo, b: &TextInfo) -> std::cmp::Ordering {
+    let a_is_dir = a.is_dir;
+    let b_is_dir = b.is_dir;
+    if a.filename == ".." && b.filename != ".." {
+        return std::cmp::Ordering::Less;
+    } else if a.filename != ".." && b.filename == ".." {
+        return std::cmp::Ordering::Greater;
+    }
+    if a_is_dir && !b_is_dir {
+        return std::cmp::Ordering::Less;
+    } else if !a_is_dir && b_is_dir {
+        return std::cmp::Ordering::Greater;
+    }
+    if a.filename.starts_with('.') && !b.filename.starts_with('.') {
+        return std::cmp::Ordering::Greater;
+    } else if !a.filename.starts_with('.') && b.filename.starts_with('.') {
+        return std::cmp::Ordering::Less;
+    }
+    a.filename.to_lowercase().cmp(&b.filename.to_lowercase())
+}
 
 slint::slint! {
     import { ScrollView, Button } from "std-widgets.slint";
